@@ -29,7 +29,7 @@ const allowList = (process.env.ALLOWED_ORIGIN || "*")
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // curl/postman vb.
+    if (!origin) return cb(null, true); 
     if (allowList.includes("*") || allowList.includes(origin)) return cb(null, true);
     cb(new Error("Not allowed by CORS"));
   },
@@ -53,19 +53,12 @@ app.get("/", (_req, res) => {
   res.send("API is working!");
 });
 
-/**
- * LIST (search + pagination)
- * GET /recipes?search=...&page=1&limit=8
- * 'q' alias'ını da kabul eder.
- * Not: 'pages' VE 'totalPages' alanlarını birlikte döndürüyoruz (frontend uyumu için).
- */
 app.get("/recipes", async (req, res) => {
   try {
     const q = (req.query.search || req.query.q || "").trim();
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "8", 10)));
 
-    // Güvenli regex
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const filter = q
       ? {
@@ -87,8 +80,8 @@ app.get("/recipes", async (req, res) => {
       page,
       limit,
       total,
-      pages,          // <-- bizim kullandığımız
-      totalPages: pages, // <-- eski/kod varyantı için uyumluluk
+      pages,          
+      totalPages: pages, 
     });
   } catch (e) {
     console.error(e);
@@ -96,7 +89,6 @@ app.get("/recipes", async (req, res) => {
   }
 });
 
-/** GET one by id */
 app.get("/recipes/:id", async (req, res) => {
   try {
     const doc = await Recipe.findById(req.params.id);
@@ -107,7 +99,6 @@ app.get("/recipes/:id", async (req, res) => {
   }
 });
 
-/** CREATE (JSON veya multipart/form-data 'image' ile) */
 app.post("/recipes", upload.single("image"), async (req, res) => {
   try {
     let { title, ingredients } = req.body;
@@ -120,7 +111,7 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
     }
 
     const base = `${req.protocol}://${req.get("host")}`;
-    const imageUrl = req.file ? `${base}/uploads/${req.file.filename}` : "";
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : "";
 
     const created = await Recipe.create({
       title: title.trim(),
@@ -135,7 +126,6 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
   }
 });
 
-/** UPDATE */
 app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   try {
     let { title, ingredients } = req.body;
@@ -150,7 +140,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     const update = { title: title.trim(), ingredients };
     if (req.file) {
       const base = `${req.protocol}://${req.get("host")}`;
-      update.imageUrl = `${base}/uploads/${req.file.filename}`;
+      update.imageUrl = `/uploads/${req.file.filename}`;
     }
 
     const updated = await Recipe.findByIdAndUpdate(req.params.id, update, {
@@ -165,7 +155,6 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   }
 });
 
-/** DELETE */
 app.delete("/recipes/:id", async (req, res) => {
   try {
     const removed = await Recipe.findByIdAndDelete(req.params.id);
