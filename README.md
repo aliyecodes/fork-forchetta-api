@@ -1,27 +1,90 @@
-# Fork & Forchetta – API
+🇬🇧 Fork & Forchetta – API
 
-**EN (English)**  
-Node.js + Express + MongoDB (Mongoose). Image upload with `multer`. Search + pagination. CORS allow-list.
+A Node.js + Express + MongoDB backend for the Fork & Forchetta recipe manager.
+Includes image upload via Cloudinary, search, pagination, and secure CORS configuration.
 
-**IT (Italiano)**  
-Node.js + Express + MongoDB (Mongoose). Upload immagini con `multer`. Ricerca + paginazione. CORS con lista consentita.
+🚀 Live
 
----
+API (Render): https://fork-forchetta-api.onrender.com
 
-## Live
-- **API (Render):** https://fork-forchetta-api.onrender.com  
-- **Web (Vercel):** https://fork-forchetta-web.vercel.app
+Frontend (Vercel): https://fork-forchetta-web.vercel.app
 
-## Features / Funzionalità
-- CRUD for recipes (title, ingredients[], optional image)
-- Search + pagination: `GET /recipes?search=...&page=1&limit=8`
-- Image upload: `multipart/form-data` field `image`
-- CORS allow-list via environment variable
+✨ Features
 
-## Local setup / Avvio locale
-```bash
-git clone <THIS-REPO-URL>
-cd fork-forchetta-api
-npm install
-cp .env.example .env   # fill / compila
-npm start               # http://localhost:5000
+Full CRUD for recipes (title, ingredients[], optional image)
+
+Search & pagination with query parameters (?search=...&page=1&limit=8)
+
+Image upload via Cloudinary
+
+- multer-storage-cloudinary
+
+CORS allow-list via environment variable
+
+Environment variables managed with .env
+
+🛠️ Tech Stack
+
+Node.js
+
+- Express
+
+MongoDB Atlas
+with Mongoose
+
+Multer
+
+- Cloudinary
+  for file uploads
+
+⚡ Local Setup
+  - git clone https://github.com/aliyecodes/fork-forchetta-api.git
+  - cd fork-forchetta-api
+  - npm install
+  - cp .env.example .env 
+  - npm start 
+
+
+  🇮🇹 Fork & Forchetta – API
+
+Backend Node.js + Express + MongoDB per il progetto Fork & Forchetta.
+Include upload di immagini con Cloudinary, ricerca, paginazione e configurazione CORS sicura.
+
+🚀 Live
+
+API (Render): https://fork-forchetta-api.onrender.com
+
+Frontend (Vercel): https://fork-forchetta-web.vercel.app
+
+✨ Funzionalità
+
+CRUD completo per le ricette (titolo, ingredienti[], immagine opzionale)
+
+Ricerca e paginazione con parametri (?search=...&page=1&limit=8)
+
+Upload immagini tramite Cloudinary
+ + multer-storage-cloudinary
+
+Lista consentita CORS tramite variabile d’ambiente
+
+Variabili d’ambiente gestite con .env
+
+🛠️ Stack Tecnologico
+
+Node.js
+ + Express
+
+MongoDB Atlas
+ con Mongoose
+
+Multer
+ + Cloudinary
+ per l’upload delle immagini
+
+⚡ Avvio Locale
+  - git clone https://github.com/aliyecodes/fork-forchetta-api.git
+  - cd fork-forchetta-api
+  - npm install
+  - cp .env.example .env   
+  - npm start              
+
