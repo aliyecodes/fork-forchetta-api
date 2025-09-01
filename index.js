@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const multer = require("multer");
+
 const { v2: cloudinary } = require("cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 
@@ -13,19 +14,22 @@ const app = express();
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
+  api_key:    process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "forchetta", 
+    folder: "forchetta",
     allowed_formats: ["jpg", "jpeg", "png", "webp"],
     transformation: [{ width: 1200, crop: "limit" }],
   },
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, 
+});
 
 const allowList = (process.env.ALLOWED_ORIGIN || "*")
   .split(",")
@@ -34,9 +38,10 @@ const allowList = (process.env.ALLOWED_ORIGIN || "*")
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (allowList.includes("*") || allowList.includes(origin))
+      if (!origin) return cb(null, true); 
+      if (allowList.includes("*") || allowList.includes(origin)) {
         return cb(null, true);
+      }
       cb(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -56,18 +61,17 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-app.get("/", (_req, res) => {
-  res.send("API is working!");
-});
+app.get("/", (_req, res) => res.send("API is working!"));
 
 app.get("/healthz", (_req, res) => {
+  const mongoOk = mongoose.connection.readyState === 1; 
   res.json({
     ok: true,
+    mongo: mongoOk ? "up" : "down",
     env: process.env.NODE_ENV || "development",
     time: new Date().toISOString(),
   });
 });
-
 
 app.get("/recipes", async (req, res) => {
   try {
@@ -92,18 +96,11 @@ app.get("/recipes", async (req, res) => {
         .limit(limit),
       Recipe.countDocuments(filter),
     ]);
-    const pages = Math.max(1, Math.ceil(total / limit));
 
-    res.json({
-      items,
-      page,
-      limit,
-      total,
-      pages,
-      totalPages: pages,
-    });
+    const pages = Math.max(1, Math.ceil(total / limit));
+    res.json({ items, page, limit, total, pages, totalPages: pages });
   } catch (e) {
-    console.error(e);
+    console.error("GET /recipes error:", e);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -123,22 +120,13 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
     let { title, ingredients } = req.body;
 
     if (typeof ingredients === "string") {
-      ingredients = ingredients
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      ingredients = ingredients.split(",").map((s) => s.trim()).filter(Boolean);
     }
-    if (
-      typeof title !== "string" ||
-      !Array.isArray(ingredients) ||
-      ingredients.length === 0
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Invalid payload: title and ingredients[] required" });
+    if (typeof title !== "string" || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: "Invalid payload: title and ingredients[] required" });
     }
 
-    const imageUrl = req.file ? req.file.path : "";
+    const imageUrl = req.file?.path || req.file?.secure_url || "";
 
     const created = await Recipe.create({
       title: title.trim(),
@@ -148,7 +136,7 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
 
     res.status(201).json(created);
   } catch (e) {
-    console.error(e);
+    console.error("POST /recipes error:", e);
     res.status(500).json({ error: "Create failed" });
   }
 });
@@ -158,24 +146,15 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     let { title, ingredients } = req.body;
 
     if (typeof ingredients === "string") {
-      ingredients = ingredients
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      ingredients = ingredients.split(",").map((s) => s.trim()).filter(Boolean);
     }
-    if (
-      typeof title !== "string" ||
-      !Array.isArray(ingredients) ||
-      ingredients.length === 0
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Invalid payload: title and ingredients[] required" });
+    if (typeof title !== "string" || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: "Invalid payload: title and ingredients[] required" });
     }
 
     const update = { title: title.trim(), ingredients };
     if (req.file) {
-      update.imageUrl = req.file.path; // Cloudinary URL
+      update.imageUrl = req.file.path || req.file.secure_url || "";
     }
 
     const updated = await Recipe.findByIdAndUpdate(req.params.id, update, {
@@ -185,7 +164,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (e) {
-    console.error(e);
+    console.error("PUT /recipes/:id error:", e);
     res.status(400).json({ error: "Invalid id" });
   }
 });
