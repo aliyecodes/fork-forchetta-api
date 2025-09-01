@@ -60,6 +60,15 @@ app.get("/", (_req, res) => {
   res.send("API is working!");
 });
 
+app.get("/healthz", (_req, res) => {
+  res.json({
+    ok: true,
+    env: process.env.NODE_ENV || "development",
+    time: new Date().toISOString(),
+  });
+});
+
+
 app.get("/recipes", async (req, res) => {
   try {
     const q = (req.query.search || req.query.q || "").trim();
