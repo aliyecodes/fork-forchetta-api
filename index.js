@@ -31,6 +31,20 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, 
 });
 
+function uploadSingle(field) {
+  return (req, res, next) => {
+    upload.single(field)(req, res, (err)) ; {
+      if (err) {
+        const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        return res
+          .status(status)
+          .json({ error: "Upload failed", detail: err.message || String(err) });
+      }
+      next();
+    };
+  };
+}
+
 const allowList = (process.env.ALLOWED_ORIGIN || "*")
   .split(",")
   .map((s) => s.trim());
@@ -68,6 +82,7 @@ app.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
     mongo: mongoOk ? "up" : "down",
+    cloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
     env: process.env.NODE_ENV || "development",
     time: new Date().toISOString(),
   });
