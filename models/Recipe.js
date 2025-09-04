@@ -8,6 +8,7 @@ const recipeSchema = new mongoose.Schema(
       required: true,
       validate: v => Array.isArray(v) && v.filter(Boolean).length > 0
     },
+    instructions: {type: String, default:""},
     imageUrl: { type: String, default: "" }
   },
   { timestamps: true }
