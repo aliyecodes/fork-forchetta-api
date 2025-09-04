@@ -103,7 +103,7 @@ app.get("/recipes", async (req, res) => {
           $or: [
             { title: { $regex: esc(q), $options: "i" } },
             { ingredients: { $elemMatch: { $regex: esc(q), $options: "i" } } },
-            { instructions: { $regex: esc(q), $options: "i" } }, // yeni
+            { instructions: { $regex: esc(q), $options: "i" } }, 
           ],
         }
       : {};
@@ -134,16 +134,13 @@ app.get("/recipes/:id", async (req, res) => {
   }
 });
 
-// Yardımcı: ingredients string/JSON ikisini de kabul et
 function normalizeIngredients(input) {
   if (Array.isArray(input)) return input.map(s => String(s).trim()).filter(Boolean);
   if (typeof input === "string") {
-    // Önce JSON deneriz
     try {
       const maybe = JSON.parse(input);
       if (Array.isArray(maybe)) return maybe.map(s => String(s).trim()).filter(Boolean);
     } catch (_) {}
-    // Virgülle ayrılmışsa
     return input.split(",").map(s => s.trim()).filter(Boolean);
   }
   return [];
@@ -154,7 +151,6 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
   try {
     let { title, ingredients, instructions = "" } = req.body;
 
-    // Ingredients normalize
     if (typeof ingredients === "string") {
       try {
         const parsed = JSON.parse(ingredients);
@@ -174,7 +170,6 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
       }
     }
 
-    // Validasyon
     if (
       typeof title !== "string" ||
       !Array.isArray(ingredients) ||
@@ -190,7 +185,7 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
     const created = await Recipe.create({
       title: title.trim(),
       ingredients,
-      instructions: String(instructions || "").trim(), // ⬅️ artık garanti
+      instructions: String(instructions || "").trim(), 
       imageUrl,
     });
 
@@ -206,7 +201,6 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   try {
     let { title, ingredients, instructions = "" } = req.body;
 
-    // Ingredients normalize
     if (typeof ingredients === "string") {
       try {
         const parsed = JSON.parse(ingredients);
@@ -226,7 +220,6 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
       }
     }
 
-    // Validasyon
     if (
       typeof title !== "string" ||
       !Array.isArray(ingredients) ||
@@ -240,7 +233,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     const update = {
       title: title.trim(),
       ingredients,
-      instructions: String(instructions || "").trim(), // ⬅️ her zaman güncelliyoruz
+      instructions: String(instructions || "").trim(), 
     };
 
     if (req.file) {
