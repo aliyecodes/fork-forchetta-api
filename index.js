@@ -1,22 +1,36 @@
 require("dotenv").config();
 
+
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const multer = require("multer");
-
 const { v2: cloudinary } = require("cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const rateLimit = require("express-rate-limit");
+
 
 const Recipe = require("./models/Recipe");
 
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests,please try again later." },
+});
+
+
 const app = express();
+
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
 
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -28,43 +42,33 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, 
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-function uploadSingle(field) {
-  return (req, res, next) => {
-    upload.single(field)(req, res, (err)) ; {
-      if (err) {
-        const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
-        return res
-          .status(status)
-          .json({ error: "Upload failed", detail: err.message || String(err) });
-      }
-      next();
-    };
-  };
-}
 
 const allowList = (process.env.ALLOWED_ORIGIN || "*")
   .split(",")
   .map((s) => s.trim());
 
+
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true); 
+      if (!origin) return cb(null, true);
       if (allowList.includes("*") || allowList.includes(origin)) {
         return cb(null, true);
       }
       cb(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Accept"],
   })
 );
 
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 
 if (!process.env.MONGODB_URI) {
   console.error("❌ MONGODB_URI missing. Check .env");
@@ -75,14 +79,23 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
+
+app.use(limiter);
+
+
 app.get("/", (_req, res) => res.send("API is working!"));
 
+
 app.get("/healthz", (_req, res) => {
-  const mongoOk = mongoose.connection.readyState === 1; 
+  const mongoOk = mongoose.connection.readyState === 1;
   res.json({
     ok: true,
     mongo: mongoOk ? "up" : "down",
-    cloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
+    cloudinary: !!(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    ),
     env: process.env.NODE_ENV || "development",
     time: new Date().toISOString(),
   });
@@ -94,15 +107,18 @@ app.get("/recipes", async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "8", 10)));
 
+
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const filter = q
       ? {
           $or: [
             { title: { $regex: esc(q), $options: "i" } },
             { ingredients: { $elemMatch: { $regex: esc(q), $options: "i" } } },
+            { instructions: { $regex: esc(q), $options: "i" } }, // yeni
           ],
         }
       : {};
+
 
     const [items, total] = await Promise.all([
       Recipe.find(filter)
@@ -112,6 +128,7 @@ app.get("/recipes", async (req, res) => {
       Recipe.countDocuments(filter),
     ]);
 
+
     const pages = Math.max(1, Math.ceil(total / limit));
     res.json({ items, page, limit, total, pages, totalPages: pages });
   } catch (e) {
@@ -119,6 +136,7 @@ app.get("/recipes", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 app.get("/recipes/:id", async (req, res) => {
   try {
@@ -130,24 +148,39 @@ app.get("/recipes/:id", async (req, res) => {
   }
 });
 
+
 app.post("/recipes", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients } = req.body;
+    let { title, ingredients, instructions } = req.body;
+
 
     if (typeof ingredients === "string") {
-      ingredients = ingredients.split(",").map((s) => s.trim()).filter(Boolean);
+      ingredients = ingredients
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
-    if (typeof title !== "string" || !Array.isArray(ingredients) || ingredients.length === 0) {
-      return res.status(400).json({ error: "Invalid payload: title and ingredients[] required" });
+    if (
+      typeof title !== "string" ||
+      !Array.isArray(ingredients) ||
+      ingredients.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Invalid payload: title and ingredients[] required" });
     }
 
+
     const imageUrl = req.file?.path || req.file?.secure_url || "";
+
 
     const created = await Recipe.create({
       title: title.trim(),
       ingredients,
       imageUrl,
+      instructions: typeof instructions === "string" ? instructions.trim() : "",
     });
+
 
     res.status(201).json(created);
   } catch (e) {
@@ -156,21 +189,40 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
   }
 });
 
+
 app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients } = req.body;
+    let { title, ingredients, instructions } = req.body;
+
 
     if (typeof ingredients === "string") {
-      ingredients = ingredients.split(",").map((s) => s.trim()).filter(Boolean);
+      ingredients = ingredients
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
-    if (typeof title !== "string" || !Array.isArray(ingredients) || ingredients.length === 0) {
-      return res.status(400).json({ error: "Invalid payload: title and ingredients[] required" });
+    if (
+      typeof title !== "string" ||
+      !Array.isArray(ingredients) ||
+      ingredients.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Invalid payload: title and ingredients[] required" });
     }
 
-    const update = { title: title.trim(), ingredients };
+
+    const update = {
+      title: title.trim(),
+      ingredients,
+    };
+    if (typeof instructions === "string") {
+      update.instructions = instructions.trim();
+    }
     if (req.file) {
       update.imageUrl = req.file.path || req.file.secure_url || "";
     }
+
 
     const updated = await Recipe.findByIdAndUpdate(req.params.id, update, {
       new: true,
@@ -184,6 +236,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   }
 });
 
+
 app.delete("/recipes/:id", async (req, res) => {
   try {
     const removed = await Recipe.findByIdAndDelete(req.params.id);
@@ -194,7 +247,37 @@ app.delete("/recipes/:id", async (req, res) => {
   }
 });
 
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
+
+
+app.use((err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({
+      error:
+        "File too large. Max 5MB allowed. / File troppo grande. Massimo 5 MB consentiti.",
+    });
+  }
+  next(err);
+});
+
+
+app.use((err, req, res, next) => {
+  console.error("❌ Error:", err.message);
+  res.status(err.status || 500).json({
+    error: "Internal Server Error",
+    message: err.message,
+  });
+});
+
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Not found",
+    path: req.originalUrl,
+  });
+});
+
