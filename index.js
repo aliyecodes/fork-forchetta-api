@@ -134,10 +134,27 @@ app.get("/recipes/:id", async (req, res) => {
   }
 });
 
+// Yardımcı: ingredients string/JSON ikisini de kabul et
+function normalizeIngredients(input) {
+  if (Array.isArray(input)) return input.map(s => String(s).trim()).filter(Boolean);
+  if (typeof input === "string") {
+    // Önce JSON deneriz
+    try {
+      const maybe = JSON.parse(input);
+      if (Array.isArray(maybe)) return maybe.map(s => String(s).trim()).filter(Boolean);
+    } catch (_) {}
+    // Virgülle ayrılmışsa
+    return input.split(",").map(s => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+
 app.post("/recipes", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients, instructions } = req.body;
+    let { title, ingredients, instructions = "" } = req.body;
 
+    // Ingredients normalize
     if (typeof ingredients === "string") {
       try {
         const parsed = JSON.parse(ingredients);
@@ -157,6 +174,7 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
       }
     }
 
+    // Validasyon
     if (
       typeof title !== "string" ||
       !Array.isArray(ingredients) ||
@@ -172,8 +190,8 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
     const created = await Recipe.create({
       title: title.trim(),
       ingredients,
+      instructions: String(instructions || "").trim(), // ⬅️ artık garanti
       imageUrl,
-      instructions: typeof instructions === "string" ? instructions.trim() : "",
     });
 
     res.status(201).json(created);
@@ -183,10 +201,12 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
   }
 });
 
+
 app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients, instructions } = req.body;
+    let { title, ingredients, instructions = "" } = req.body;
 
+    // Ingredients normalize
     if (typeof ingredients === "string") {
       try {
         const parsed = JSON.parse(ingredients);
@@ -206,6 +226,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
       }
     }
 
+    // Validasyon
     if (
       typeof title !== "string" ||
       !Array.isArray(ingredients) ||
@@ -219,10 +240,9 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     const update = {
       title: title.trim(),
       ingredients,
+      instructions: String(instructions || "").trim(), // ⬅️ her zaman güncelliyoruz
     };
-    if (typeof instructions === "string") {
-      update.instructions = instructions.trim();
-    }
+
     if (req.file) {
       update.imageUrl = req.file.path || req.file.secure_url || "";
     }
@@ -238,6 +258,7 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     res.status(400).json({ error: "Invalid id" });
   }
 });
+
 
 app.delete("/recipes/:id", async (req, res) => {
   try {
