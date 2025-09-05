@@ -8,6 +8,8 @@ const { v2: cloudinary } = require("cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const rateLimit = require("express-rate-limit");
 
+const { z } = require("zod");
+
 const Recipe = require("./models/Recipe");
 
 const limiter = rateLimit({
@@ -36,8 +38,39 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 2 * 1024 * 1024 },
 });
+
+const RecipePayload = z.object({
+  title: z.string().trim().min(1).max(120),
+  ingredients: z.array(z.string().trim().min(1)).min(1).max(50),
+  instructions: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+
+function normalizeAndValidate(req) {
+  let { title, ingredients, instructions } = req.body;
+  if (typeof ingredients === "string") {
+    try {
+      const parsed = JSON.parse(ingredients);
+      ingredients = Array.isArray(parsed)
+        ? parsed
+        : String(ingredients)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+    } catch {
+      ingredients = String(ingredients)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+  const parsed = RecipePayload.safeParse({ title, ingredients, instructions });
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+  return { value: parsed.data };
+}
 
 const allowList = (process.env.ALLOWED_ORIGIN || "*")
   .split(",")
@@ -103,7 +136,7 @@ app.get("/recipes", async (req, res) => {
           $or: [
             { title: { $regex: esc(q), $options: "i" } },
             { ingredients: { $elemMatch: { $regex: esc(q), $options: "i" } } },
-            { instructions: { $regex: esc(q), $options: "i" } }, 
+            { instructions: { $regex: esc(q), $options: "i" } },
           ],
         }
       : {};
@@ -135,109 +168,61 @@ app.get("/recipes/:id", async (req, res) => {
 });
 
 function normalizeIngredients(input) {
-  if (Array.isArray(input)) return input.map(s => String(s).trim()).filter(Boolean);
+  if (Array.isArray(input))
+    return input.map((s) => String(s).trim()).filter(Boolean);
   if (typeof input === "string") {
     try {
       const maybe = JSON.parse(input);
-      if (Array.isArray(maybe)) return maybe.map(s => String(s).trim()).filter(Boolean);
+      if (Array.isArray(maybe))
+        return maybe.map((s) => String(s).trim()).filter(Boolean);
     } catch (_) {}
-    return input.split(",").map(s => s.trim()).filter(Boolean);
+    return input
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   return [];
 }
 
-
 app.post("/recipes", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients, instructions = "" } = req.body;
-
-    if (typeof ingredients === "string") {
-      try {
-        const parsed = JSON.parse(ingredients);
-        if (Array.isArray(parsed)) {
-          ingredients = parsed;
-        } else {
-          ingredients = ingredients
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-        }
-      } catch {
-        ingredients = ingredients
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
-    }
-
-    if (
-      typeof title !== "string" ||
-      !Array.isArray(ingredients) ||
-      ingredients.length === 0
-    ) {
+    const result = normalizeAndValidate(req);
+    if (result.error) {
       return res
         .status(400)
-        .json({ error: "Invalid payload: title and ingredients[] required" });
+        .json({ error: "ValidationError", details: result.error });
     }
+    const { title, ingredients, instructions } = result.value;
 
+    // Cloudinary storage'da req.file.path zaten tam URL; local olsaydı base eklerdik
     const imageUrl = req.file?.path || req.file?.secure_url || "";
 
     const created = await Recipe.create({
-      title: title.trim(),
+      title,
       ingredients,
-      instructions: String(instructions || "").trim(), 
+      instructions: instructions || "",
       imageUrl,
     });
-
     res.status(201).json(created);
   } catch (e) {
-    console.error("POST /recipes error:", e);
+    console.error(e);
     res.status(500).json({ error: "Create failed" });
   }
 });
 
-
 app.put("/recipes/:id", upload.single("image"), async (req, res) => {
   try {
-    let { title, ingredients, instructions = "" } = req.body;
-
-    if (typeof ingredients === "string") {
-      try {
-        const parsed = JSON.parse(ingredients);
-        if (Array.isArray(parsed)) {
-          ingredients = parsed;
-        } else {
-          ingredients = ingredients
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-        }
-      } catch {
-        ingredients = ingredients
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
-    }
-
-    if (
-      typeof title !== "string" ||
-      !Array.isArray(ingredients) ||
-      ingredients.length === 0
-    ) {
+    const result = normalizeAndValidate(req);
+    if (result.error) {
       return res
         .status(400)
-        .json({ error: "Invalid payload: title and ingredients[] required" });
+        .json({ error: "ValidationError", details: result.error });
     }
+    const { title, ingredients, instructions } = result.value;
 
-    const update = {
-      title: title.trim(),
-      ingredients,
-      instructions: String(instructions || "").trim(), 
-    };
-
-    if (req.file) {
-      update.imageUrl = req.file.path || req.file.secure_url || "";
+    const update = { title, ingredients, instructions: instructions || "" };
+    if (req.file?.path || req.file?.secure_url) {
+      update.imageUrl = req.file.path || req.file.secure_url;
     }
 
     const updated = await Recipe.findByIdAndUpdate(req.params.id, update, {
@@ -247,11 +232,10 @@ app.put("/recipes/:id", upload.single("image"), async (req, res) => {
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (e) {
-    console.error("PUT /recipes/:id error:", e);
+    console.error(e);
     res.status(400).json({ error: "Invalid id" });
   }
 });
-
 
 app.delete("/recipes/:id", async (req, res) => {
   try {
@@ -264,9 +248,11 @@ app.delete("/recipes/:id", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+}
+
+module.exports = app;
 
 app.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
