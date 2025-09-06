@@ -1,5 +1,10 @@
 🇬🇧 Fork & Forchetta – API
 
+[![Render](https://img.shields.io/badge/Backend-Render-4b9)](https://fork-forchetta-api.onrender.com)
+[![MongoDB](https://img.shields.io/badge/DB-MongoDB-4faa41)](#)
+
+**Healthcheck:** `GET /healthz` → returns `{ ok: true, mongo: "connected", uptime: ... }`
+
 A Node.js + Express + MongoDB backend for the Fork & Forchetta recipe manager.
 Includes image upload via Cloudinary, search, pagination, and secure CORS configuration.
 
@@ -38,14 +43,14 @@ Multer
   for file uploads
 
 ⚡ Local Setup
-  - git clone https://github.com/aliyecodes/fork-forchetta-api.git
-  - cd fork-forchetta-api
-  - npm install
-  - cp .env.example .env 
-  - npm start 
 
+- git clone https://github.com/aliyecodes/fork-forchetta-api.git
+- cd fork-forchetta-api
+- npm install
+- cp .env.example .env
+- npm start
 
-  🇮🇹 Fork & Forchetta – API
+🇮🇹 Fork & Forchetta – API
 
 Backend Node.js + Express + MongoDB per il progetto Fork & Forchetta.
 Include upload di immagini con Cloudinary, ricerca, paginazione e configurazione CORS sicura.
@@ -63,7 +68,8 @@ CRUD completo per le ricette (titolo, ingredienti[], immagine opzionale)
 Ricerca e paginazione con parametri (?search=...&page=1&limit=8)
 
 Upload immagini tramite Cloudinary
- + multer-storage-cloudinary
+
+- multer-storage-cloudinary
 
 Lista consentita CORS tramite variabile d’ambiente
 
@@ -72,19 +78,21 @@ Variabili d’ambiente gestite con .env
 🛠️ Stack Tecnologico
 
 Node.js
- + Express
+
+- Express
 
 MongoDB Atlas
- con Mongoose
+con Mongoose
 
 Multer
- + Cloudinary
- per l’upload delle immagini
+
+- Cloudinary
+  per l’upload delle immagini
 
 ⚡ Avvio Locale
-  - git clone https://github.com/aliyecodes/fork-forchetta-api.git
-  - cd fork-forchetta-api
-  - npm install
-  - cp .env.example .env   
-  - npm start              
 
+- git clone https://github.com/aliyecodes/fork-forchetta-api.git
+- cd fork-forchetta-api
+- npm install
+- cp .env.example .env
+- npm start
