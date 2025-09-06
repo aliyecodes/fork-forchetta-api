@@ -7,7 +7,6 @@ const multer = require("multer");
 const { v2: cloudinary } = require("cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const rateLimit = require("express-rate-limit");
-
 const { z } = require("zod");
 
 const Recipe = require("./models/Recipe");
@@ -17,7 +16,7 @@ const limiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests,please try again later." },
+  message: { error: "Too many requests, please try again later." },
 });
 
 const app = express();
@@ -36,9 +35,10 @@ const storage = new CloudinaryStorage({
     transformation: [{ width: 1200, crop: "limit" }],
   },
 });
+
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 2 * 1024 * 1024 }, 
 });
 
 const RecipePayload = z.object({
@@ -49,6 +49,7 @@ const RecipePayload = z.object({
 
 function normalizeAndValidate(req) {
   let { title, ingredients, instructions } = req.body;
+
   if (typeof ingredients === "string") {
     try {
       const parsed = JSON.parse(ingredients);
@@ -65,6 +66,7 @@ function normalizeAndValidate(req) {
         .filter(Boolean);
     }
   }
+
   const parsed = RecipePayload.safeParse({ title, ingredients, instructions });
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
@@ -72,23 +74,41 @@ function normalizeAndValidate(req) {
   return { value: parsed.data };
 }
 
-const allowList = (process.env.ALLOWED_ORIGIN || "*")
+const envOrigins = (process.env.CORS_ORIGINS || "")
   .split(",")
-  .map((s) => s.trim());
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const defaultAllowed = [
+  "https://fork-forchetta-web.vercel.app", 
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5500",
+];
+
+const allowedOrigins = [...new Set([...defaultAllowed, ...envOrigins])];
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; 
+  if (allowedOrigins.includes(origin)) return true;
+  if (origin.endsWith(".vercel.app")) return true;
+  return false;
+};
+
+const corsOrigin = (origin, cb) =>
+  isAllowedOrigin(origin)
+    ? cb(null, true)
+    : cb(new Error("Not allowed by CORS"));
 
 app.use(
   cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (allowList.includes("*") || allowList.includes(origin)) {
-        return cb(null, true);
-      }
-      cb(new Error("Not allowed by CORS"));
-    },
+    origin: corsOrigin,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept"],
+    allowedHeaders: ["Content-Type", "Accept", "Authorization"],
   })
 );
+app.options("*", cors({ origin: corsOrigin }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -118,6 +138,7 @@ app.get("/healthz", (_req, res) => {
     ),
     env: process.env.NODE_ENV || "development",
     time: new Date().toISOString(),
+    allowedOrigins,
   });
 });
 
@@ -125,10 +146,7 @@ app.get("/recipes", async (req, res) => {
   try {
     const q = (req.query.search || req.query.q || "").trim();
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
-    const limit = Math.min(
-      50,
-      Math.max(1, parseInt(req.query.limit || "8", 10))
-    );
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "8", 10)));
 
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const filter = q
@@ -194,7 +212,6 @@ app.post("/recipes", upload.single("image"), async (req, res) => {
     }
     const { title, ingredients, instructions } = result.value;
 
-    // Cloudinary storage'da req.file.path zaten tam URL; local olsaydı base eklerdik
     const imageUrl = req.file?.path || req.file?.secure_url || "";
 
     const created = await Recipe.create({
@@ -247,18 +264,11 @@ app.delete("/recipes/:id", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
-if (require.main === module) {
-  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
-}
-
-module.exports = app;
-
 app.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({
       error:
-        "File too large. Max 5MB allowed. / File troppo grande. Massimo 5 MB consentiti.",
+        "File too large. Max 2MB allowed. / File troppo grande. Massimo 2 MB consentiti.",
     });
   }
   next(err);
@@ -273,8 +283,12 @@ app.use((err, req, res, next) => {
 });
 
 app.use((req, res) => {
-  res.status(404).json({
-    error: "Not found",
-    path: req.originalUrl,
-  });
+  res.status(404).json({ error: "Not found", path: req.originalUrl });
 });
+
+const PORT = process.env.PORT || 5000;
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+}
+
+module.exports = app;
